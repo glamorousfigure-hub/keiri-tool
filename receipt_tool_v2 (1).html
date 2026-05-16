@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="経費記録">
+<meta name="theme-color" content="#2d6a4f">
+<title>経費記録ツール</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --accent: #2d6a4f;
+    --accent2: #40916c;
+    --text: #1a1a1a;
+    --text2: #555;
+    --text3: #888;
+    --border: #ddd8ce;
+    --danger: #c0392b;
+    --success: #27ae60;
+    --warn: #e67e22;
+    --radius: 14px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+
+  /* ===== PIN画面 ===== */
+  #pin-screen {
+    position: fixed; inset: 0; background: var(--accent);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 1000; gap: 32px;
+  }
+  #pin-screen h1 { color: white; font-size: 20px; font-weight: 700; }
+  #pin-screen p { color: rgba(255,255,255,0.7); font-size: 13px; margin-top: -20px; }
+  .pin-dots { display: flex; gap: 16px; }
+  .pin-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: transparent; transition: background 0.15s;
+  }
+  .pin-dot.filled { background: white; border-color: white; }
+  .pin-dot.error { background: #e74c3c; border-color: #e74c3c; }
+  .pin-grid { display: grid; grid-template-columns: repeat(3, 72px); gap: 12px; }
+  .pin-btn {
+    width: 72px; height: 72px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: white; font-size: 22px; font-weight: 700;
+    font-family: inherit; cursor: pointer;
+    transition: background 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pin-btn:active { background: rgba(255,255,255,0.3); }
+  .pin-btn.del { font-size: 16px; }
+  .pin-btn.empty { border: none; background: transparent; cursor: default; }
+  .pin-error-msg { color: #e74c3c; font-size: 13px; min-height: 18px; }
+
+  /* ===== メイン画面 ===== */
+  #main-screen { display: none; }
+  header {
+    background: var(--accent); color: white;
+    padding: 18px 20px 16px; position: sticky; top: 0; z-index: 100;
+  }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header p { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+  .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+
+  .hint-bar {
+    background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px;
+    padding: 10px 14px; font-size: 12px; color: #795548;
+    margin-bottom: 16px; display: none;
+  }
+  .hint-bar.show { display: block; }
+
+  .camera-area {
+    background: var(--surface); border-radius: var(--radius);
+    border: 2px dashed var(--border); overflow: hidden;
+    margin-bottom: 16px; box-shadow: var(--shadow);
+  }
+  #preview-img {
+    width: 100%; max-height: 280px; object-fit: contain;
+    display: none; background: #f9f9f7;
+  }
+  .camera-placeholder {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 40px 20px; gap: 10px; color: var(--text3);
+  }
+  .camera-placeholder svg { width: 52px; height: 52px; stroke: var(--border); }
+  .camera-placeholder p { font-size: 13px; }
+
+  .btn-camera {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 14px; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius); font-family: inherit;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    margin-bottom: 12px; box-shadow: var(--shadow); transition: background 0.15s;
+  }
+  .btn-camera:active { background: var(--accent2); }
+  #file-input { display: none; }
+
+  .btn-analyze {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 13px; background: var(--surface); color: var(--accent);
+    border: 2px solid var(--accent); border-radius: var(--radius);
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer; margin-bottom: 16px; transition: all 0.15s;
+  }
+  .btn-analyze:active { background: #e8f4ef; }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status-bar {
+    padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
+    margin-bottom: 14px; display: none; align-items: center; gap: 8px;
+  }
+  .status-bar.loading { display: flex; background: #e8f4ef; color: var(--accent); }
+  .status-bar.error { display: flex; background: #fdecea; color: var(--danger); }
+  .status-bar.success { display: flex; background: #eafaf1; color: var(--success); }
+  .status-bar.warn { display: flex; background: #fef3e2; color: var(--warn); }
+
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid rgba(45,106,79,0.3);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .form-card {
+    background: var(--surface); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
+  }
+  .form-card h2 { font-size: 13px; font-weight: 700; color: var(--text3); letter-spacing: 0.08em; margin-bottom: 14px; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
+  .field-warn { font-size: 11px; color: var(--warn); margin-top: 3px; display: none; }
+  .field-warn.show { display: block; }
+
+  input[type="text"], input[type="date"], input[type="number"], select, textarea {
+    width: 100%; padding: 11px 13px; border: 1.5px solid var(--border);
+    border-radius: 10px; font-family: inherit; font-size: 15px;
+    color: var(--text); background: var(--surface); outline: none;
+    transition: border-color 0.15s; -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { height: 70px; resize: none; }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+  }
+  .ai-filled { border-color: var(--accent2) !important; background: #f0faf5 !important; }
+  .date-warn { border-color: var(--warn) !important; background: #fef9f0 !important; }
+
+  .btn-submit {
+    width: 100%; padding: 16px; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius); font-family: inherit;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(45,106,79,0.3); transition: all 0.15s;
+  }
+  .btn-submit:active { transform: scale(0.98); }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-reset {
+    width: 100%; padding: 12px; background: transparent; color: var(--text3);
+    border: none; font-family: inherit; font-size: 13px;
+    cursor: pointer; margin-top: 10px; text-decoration: underline;
+  }
+
+  .done-msg {
+    display: none; flex-direction: column; align-items: center;
+    padding: 30px 20px; background: var(--surface); border-radius: var(--radius);
+    box-shadow: var(--shadow); margin-bottom: 16px; text-align: center; gap: 10px;
+  }
+  .done-msg.show { display: flex; }
+  .done-icon {
+    width: 56px; height: 56px; background: var(--success);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  }
+  .done-icon svg { width: 30px; height: 30px; stroke: white; stroke-width: 2.5; fill: none; }
+  .done-msg h2 { font-size: 18px; font-weight: 700; color: var(--success); }
+  .done-msg p { font-size: 13px; color: var(--text2); }
+  .done-row-info { font-size: 11px; color: var(--text3); }
+
+  /* オフライン警告 */
+  .offline-bar {
+    display: none; background: var(--danger); color: white;
+    padding: 8px 16px; font-size: 12px; font-weight: 700; text-align: center;
+  }
+  .offline-bar.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ===== PIN画面 ===== -->
+<div id="pin-screen">
+  <h1>📋 経費記録ツール</h1>
+  <p>PINコードを入力してください</p>
+  <div class="pin-dots">
+    <div class="pin-dot" id="dot-0"></div>
+    <div class="pin-dot" id="dot-1"></div>
+    <div class="pin-dot" id="dot-2"></div>
+    <div class="pin-dot" id="dot-3"></div>
+  </div>
+  <div class="pin-grid">
+    <button class="pin-btn" onclick="pinInput('1')">1</button>
+    <button class="pin-btn" onclick="pinInput('2')">2</button>
+    <button class="pin-btn" onclick="pinInput('3')">3</button>
+    <button class="pin-btn" onclick="pinInput('4')">4</button>
+    <button class="pin-btn" onclick="pinInput('5')">5</button>
+    <button class="pin-btn" onclick="pinInput('6')">6</button>
+    <button class="pin-btn" onclick="pinInput('7')">7</button>
+    <button class="pin-btn" onclick="pinInput('8')">8</button>
+    <button class="pin-btn" onclick="pinInput('9')">9</button>
+    <button class="pin-btn empty"></button>
+    <button class="pin-btn" onclick="pinInput('0')">0</button>
+    <button class="pin-btn del" onclick="pinDelete()">⌫</button>
+  </div>
+  <div class="pin-error-msg" id="pin-error"></div>
+</div>
+
+<!-- ===== メイン画面 ===== -->
+<div id="main-screen">
+  <div class="offline-bar" id="offline-bar">電波がありません。接続を確認してください。</div>
+
+  <header>
+    <h1>📋 経費記録ツール</h1>
+    <p>レシートを撮影してスプレッドシートに自動登録</p>
+  </header>
+
+  <div class="container">
+
+    <div class="hint-bar" id="hint-bar">
+      💡 ホーム画面に追加すると素早く開けます（Safari → 共有 → ホーム画面に追加）
+    </div>
+
+    <div class="camera-area">
+      <div class="camera-placeholder" id="placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <p>レシートの写真を撮影してください</p>
+      </div>
+      <img id="preview-img" alt="レシートプレビュー">
+    </div>
+
+    <button class="btn-camera" onclick="document.getElementById('file-input').click()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      写真を撮る / 選ぶ
+    </button>
+    <input type="file" id="file-input" accept="image/*" capture="environment" onchange="onImageSelected(event)">
+
+    <button class="btn-analyze" id="btn-analyze" onclick="analyzeReceipt()" disabled>
+      ✨ AIで自動読み取り
+    </button>
+
+    <div class="status-bar" id="status-bar">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-text"></span>
+    </div>
+
+    <div class="done-msg" id="done-msg">
+      <div class="done-icon">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2>登録完了！</h2>
+      <p id="done-detail"></p>
+      <p class="done-row-info" id="done-row"></p>
+      <button class="btn-camera" style="margin-bottom:0;margin-top:8px" onclick="resetAll()">次のレシートを登録する</button>
+    </div>
+
+    <div class="form-card" id="form-card">
+      <h2>📝 内容を確認・入力</h2>
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="f-date">
+        <div class="field-warn" id="date-warn">⚠️ 日付が読み取れませんでした。確認して入力してください。</div>
+      </div>
+      <div class="field">
+        <label>店名・購入先</label>
+        <input type="text" id="f-store" placeholder="例：コメリ、Amazon">
+      </div>
+      <div class="field">
+        <label>金額（円）</label>
+        <input type="number" id="f-amount" placeholder="例：3480">
+      </div>
+      <div class="field">
+        <label>種別</label>
+        <select id="f-category">
+          <option value="">選択してください</option>
+          <option value="仕入れ（商品）">仕入れ（商品）</option>
+          <option value="消耗品・備品">消耗品・備品</option>
+          <option value="光熱費">光熱費</option>
+          <option value="交通費">交通費</option>
+          <option value="通信費">通信費</option>
+          <option value="その他経費">その他経費</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>メモ・商品名</label>
+        <textarea id="f-memo" placeholder="例：段ボール20枚、プチプチロール"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btn-submit" onclick="submitData()">
+      スプレッドシートに登録する
+    </button>
+    <button class="btn-reset" id="btn-reset" onclick="resetAll()">リセットして最初から</button>
+
+  </div>
+</div>
+
+<script>
+// ===== 設定 =====
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwAC7Cs7K32qyipe6qbYFBMr2ziNMuXA1qAsYItQa_cyXZgTns2-b5Cv9OYsNEiD8n0gA/exec";
+const PASSWORD = "toshi2025";
+const PIN = "0000"; // ← ここを4桁の好きな数字に変えてください
+
+// ===== PIN認証 =====
+let pinValue = "";
+
+function pinInput(num) {
+  if (pinValue.length >= 4) return;
+  pinValue += num;
+  updatePinDots();
+  if (pinValue.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinDelete() {
+  pinValue = pinValue.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = "";
+  document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('error'));
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.classList.toggle('filled', i < pinValue.length);
+  }
+}
+
+function checkPin() {
+  if (pinValue === PIN) {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('main-screen').style.display = 'block';
+    loadDraft();
+  } else {
+    document.querySelectorAll('.pin-dot').forEach(d => {
+      d.classList.remove('filled');
+      d.classList.add('error');
+    });
+    document.getElementById('pin-error').textContent = "PINが違います。もう一度入力してください。";
+    setTimeout(() => {
+      document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('error'));
+      document.getElementById('pin-error').textContent = "";
+    }, 1000);
+    pinValue = "";
+  }
+}
+
+// ===== オフライン検知 =====
+function checkOffline() {
+  document.getElementById('offline-bar').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', checkOffline);
+window.addEventListener('offline', checkOffline);
+checkOffline();
+
+// ===== iOS ヒント =====
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone) {
+  document.getElementById('hint-bar').classList.add('show');
+}
+
+// ===== 下書き保存（sessionStorage） =====
+function saveDraft() {
+  const draft = {
+    date: document.getElementById('f-date').value,
+    store: document.getElementById('f-store').value,
+    amount: document.getElementById('f-amount').value,
+    category: document.getElementById('f-category').value,
+    memo: document.getElementById('f-memo').value
+  };
+  sessionStorage.setItem('receipt_draft', JSON.stringify(draft));
+}
+
+function loadDraft() {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem('receipt_draft'));
+    if (!draft) {
+      document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+      return;
+    }
+    if (draft.date) document.getElementById('f-date').value = draft.date;
+    else document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+    if (draft.store) document.getElementById('f-store').value = draft.store;
+    if (draft.amount) document.getElementById('f-amount').value = draft.amount;
+    if (draft.category) document.getElementById('f-category').value = draft.category;
+    if (draft.memo) document.getElementById('f-memo').value = draft.memo;
+  } catch(e) {
+    document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  }
+}
+
+['f-date','f-store','f-amount','f-category','f-memo'].forEach(id => {
+  document.getElementById(id).addEventListener('input', saveDraft);
+  document.getElementById(id).addEventListener('change', saveDraft);
+});
+
+// ===== 画像選択・Exif回転補正（blueimp-load-image使用） =====
+let selectedImageBase64 = null;
+let selectedImageType = null;
+
+function onImageSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showStatus('loading', '画像を処理中...');
+
+  loadImage(
+    file,
+    function(canvas) {
+      if (canvas.type === 'error') {
+        showStatus('error', '画像の読み込みに失敗しました。もう一度試してください。');
+        return;
+      }
+      canvas.toBlob(function(blob) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+          selectedImageBase64 = ev.target.result.split(',')[1];
+          selectedImageType = 'image/jpeg';
+          const preview = document.getElementById('preview-img');
+          preview.src = ev.target.result;
+          preview.style.display = 'block';
+          document.getElementById('placeholder').style.display = 'none';
+          document.getElementById('btn-analyze').disabled = false;
+          showStatus('success', '画像を読み込みました。「AIで自動読み取り」を押してください。');
+          setTimeout(hideStatus, 2500);
+        };
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.85);
+    },
+    {
+      maxWidth: 1200,
+      maxHeight: 1600,
+      orientation: true,
+      canvas: true
+    }
+  );
+}
+
+// ===== AI読み取り =====
+async function analyzeReceipt() {
+  if (!selectedImageBase64) return;
+  if (!navigator.onLine) { showStatus('error', '電波がありません。接続を確認してください。'); return; }
+
+  showStatus('loading', 'AIがレシートを読み取っています...');
+  document.getElementById('btn-analyze').disabled = true;
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        password: PASSWORD,
+        action: 'analyze',
+        image: selectedImageBase64,
+        imageType: selectedImageType
+      })
+    });
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || '読み取り失敗');
+
+    const parsed = json.data;
+
+    // 日付：読み取れなかった場合は空欄＋警告
+    if (parsed.date && parsed.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      setFieldAI('f-date', parsed.date);
+      document.getElementById('date-warn').classList.remove('show');
+    } else {
+      document.getElementById('f-date').value = '';
+      document.getElementById('f-date').classList.add('date-warn');
+      document.getElementById('date-warn').classList.add('show');
+    }
+
+    if (parsed.store) setFieldAI('f-store', parsed.store);
+    if (parsed.amount && parsed.amount > 0) setFieldAI('f-amount', parsed.amount);
+    if (parsed.category) {
+      const sel = document.getElementById('f-category');
+      for (let opt of sel.options) {
+        if (opt.value === parsed.category) { sel.value = parsed.category; sel.classList.add('ai-filled'); break; }
+      }
+    }
+    if (parsed.memo) setFieldAI('f-memo', parsed.memo);
+    saveDraft();
+    showStatus('success', '✅ 読み取り完了！内容を確認して登録してください。');
+
+  } catch(err) {
+    showStatus('error', '❌ 読み取りエラー：' + err.message);
+    document.getElementById('btn-analyze').disabled = false;
+  }
+}
+
+function setFieldAI(id, value) {
+  const el = document.getElementById(id);
+  el.value = value;
+  el.classList.add('ai-filled');
+  el.classList.remove('date-warn');
+}
+
+// ===== 登録 =====
+async function submitData() {
+  if (!navigator.onLine) { showStatus('error', '電波がありません。接続を確認してください。'); return; }
+
+  const date = document.getElementById('f-date').value;
+  const store = document.getElementById('f-store').value;
+  const amount = document.getElementById('f-amount').value;
+  const category = document.getElementById('f-category').value;
+  const memo = document.getElementById('f-memo').value;
+
+  if (!date || !store || !amount || !category) {
+    showStatus('error', '❌ 日付・店名・金額・種別は必須です');
+    return;
+  }
+
+  document.getElementById('btn-submit').disabled = true;
+  showStatus('loading', 'スプレッドシートに登録中...');
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        password: PASSWORD,
+        action: 'register',
+        date, store,
+        amount: Number(amount),
+        category, memo,
+        image: selectedImageBase64,
+        imageType: selectedImageType
+      })
+    });
+    const json = await res.json();
+
+    if (json.status === 'duplicate') {
+      showStatus('warn', '⚠️ 同じ日付・店名・金額のデータがすでに存在します。重複していませんか？');
+      document.getElementById('btn-submit').disabled = false;
+      return;
+    }
+    if (json.status !== 'ok') throw new Error(json.message || '登録失敗');
+
+    sessionStorage.removeItem('receipt_draft');
+    hideStatus();
+    document.getElementById('done-msg').classList.add('show');
+    document.getElementById('done-detail').textContent =
+      `${date}｜${store}｜¥${Number(amount).toLocaleString()}｜${category}`;
+    document.getElementById('done-row').textContent =
+      `スプレッドシート ${json.row} 行目に記録しました`;
+    document.getElementById('form-card').style.display = 'none';
+    document.getElementById('btn-submit').style.display = 'none';
+    document.getElementById('btn-reset').style.display = 'none';
+
+  } catch(err) {
+    showStatus('error', '❌ 登録エラー：' + err.message);
+    document.getElementById('btn-submit').disabled = false;
+  }
+}
+
+// ===== ステータス表示 =====
+function showStatus(type, msg) {
+  const bar = document.getElementById('status-bar');
+  bar.className = 'status-bar ' + type;
+  document.getElementById('status-text').textContent = msg;
+  document.getElementById('spinner').style.display = type === 'loading' ? 'block' : 'none';
+}
+function hideStatus() {
+  document.getElementById('status-bar').className = 'status-bar';
+}
+
+// ===== リセット =====
+function resetAll() {
+  selectedImageBase64 = null;
+  selectedImageType = null;
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('placeholder').style.display = 'flex';
+  document.getElementById('btn-analyze').disabled = true;
+  document.getElementById('file-input').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-store').value = '';
+  document.getElementById('f-amount').value = '';
+  document.getElementById('f-category').value = '';
+  document.getElementById('f-memo').value = '';
+  document.getElementById('done-msg').classList.remove('show');
+  document.getElementById('form-card').style.display = 'block';
+  document.getElementById('btn-submit').style.display = 'block';
+  document.getElementById('btn-submit').disabled = false;
+  document.getElementById('btn-reset').style.display = 'block';
+  document.getElementById('date-warn').classList.remove('show');
+  ['f-date','f-store','f-amount','f-category','f-memo'].forEach(id => {
+    document.getElementById(id).classList.remove('ai-filled', 'date-warn');
+  });
+  sessionStorage.removeItem('receipt_draft');
+  hideStatus();
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-load-image/5.16.0/load-image.all.min.js"></script>
+</body>
+</html>
